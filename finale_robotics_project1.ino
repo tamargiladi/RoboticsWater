@@ -1,25 +1,35 @@
 #include <DHT.h>
 #define Type DHT11
 #define RELAY 9
+int a;
+#include <SoftwareSerial.h> 
+SoftwareSerial MyBlue(6,7); // RX | TX 
+//define step motor connections and speed to arduino
 const int s1 = 10;
 const int s2 = 11;
 const int s3 = 12;
 const int s4 = 13;
 int motorSpeed = 1500; // motor speed between 1000-4000. small number is bigger speed 
+
+//a function that opens the main tap of the system
 void openTap() 
 {
-  int watring_time=50000;
+  int watring_time=10000;
   digitalWrite(RELAY, HIGH);
   delay(watring_time);
   digitalWrite(RELAY, LOW);
+  closeLeftTap(); 
   return;
 }
+
+//step motor
 void motorOff(){ // turn off motor
  digitalWrite(s1, LOW); 
  digitalWrite(s2, LOW); 
  digitalWrite(s3, LOW); 
  digitalWrite(s4, LOW); 
 }
+
 
 void back(){ // function to move 1 step back
   digitalWrite(s1, HIGH); 
@@ -106,26 +116,21 @@ void forward(){ // function to move 1 step forward
   digitalWrite(s4, LOW); 
   delayMicroseconds(motorSpeed);
 }
+
+//using step motor back and forwerd to open and close the left tap
 void openLeftTap()
 {
   for (int i=0; i<=150; i++){ // go forward one circle, 509 steps
     back();
   }
+  return;
+}
+void closeLeftTap()
+{
   for (int i=0; i<=150; i++){ // go back one circle. 
     forward();
  }
  return;
-}
-void left_close_or_open(int res)
-{
-  if (res==1||res==0)
-  {
-    //close left tap
-  }
-  if (res==2)
-  {
-    //open right
-  }
 }
 
 int day_or_night1(int light_sensor)
@@ -139,9 +144,11 @@ int day_or_night1(int light_sensor)
     return (1);
   }
 }
-int checkStatus(int leftHumidity,int rightHumdity,int light_sensor)
+
+//a function that will dictate if and which tap to open
+int checkStatus(int leftHumidity,int rightHumdity)
 {
-  int day_or_night=day_or_night1(light_sensor);
+  
   //res possible outcomes:
   //0 - dont open taps
   //1 - open left tap
@@ -149,31 +156,32 @@ int checkStatus(int leftHumidity,int rightHumdity,int light_sensor)
   int res=0;
   //sensor1=left tap
   //sensor2=right tap
-  if (day_or_night==0)
+
+  if (leftHumidity<300 && rightHumdity<300)
   {
-    if (leftHumidity>400 && rightHumdity>400)
-    {
-      res=2;
-    }
-    else if (leftHumidity>400 && rightHumdity<400)
-    {
-      res=1;
-    }
+    res=2;
+  }
+  else if (leftHumidity>300 && rightHumdity<300)
+  {
+    res=1;
   }
   return (res);
 }
-int sensePin=7;
+
+//declaring varibles that we will use in loop or setup
+int sensePin=5;//digital temp and humidity sensor pin
 DHT HT(sensePin,Type);
 float humidity;
 float tempC;
 float tempF;
 int day_or_night;
-float res[5];
-
+float res[5];// array that contains all of the sensor reading values
+int res1=0;
+int leftRes=0;
 char *sensorName[]={"humidity:","temperature:","first ground moisture:","second ground moisture:","light:"};
-int sensorPin = A0; // select the input pin for LDR
-int sensorPin1 = A1;
-int sensorPin2=A2;
+int sensorPin = A0; // input pin for LDR
+int sensorPin1 = A1;//input pin for first ground humidity sensor
+int sensorPin2=A2;//input pin for second ground humidity sensor
 int sensorValue = 0; // variable to store the value coming from the sensor
 int sensorValue1=0;
 int sensorValue2 = 0;
@@ -196,6 +204,7 @@ void getValuesToArr(DHT HT,int sensorPin,int sensorPin1,int sensorPin2,float res
 void setup() 
 {
   Serial.begin(9600); //sets serial port for communication
+  MyBlue.begin(9600);
   pinMode(RELAY, OUTPUT);
   HT.begin();
   delay(500);
@@ -206,19 +215,67 @@ void setup()
 }
 void loop() 
 {
+  
   humidity=HT.readHumidity();
   tempC=HT.readTemperature();
   sensorValue = analogRead(sensorPin); // read the value from the sensor
   sensorValue1=analogRead(sensorPin1);
   sensorValue2=analogRead(sensorPin2);
+  delay(5000);
   getValuesToArr(HT,sensorPin,sensorPin1,sensorPin2,res);
-  openLeftTap();
-  digitalWrite(RELAY, LOW);
-  delay(3000);
-  digitalWrite(RELAY, HIGH);
-  delay(3000);
-
+  day_or_night=day_or_night1(sensorValue);
+  Serial.println(day_or_night);
+  if (day_or_night==0)
+  {
+    res1=checkStatus(sensorValue1,sensorValue2);
+    Serial.println("res1");
+    Serial.println(res1);
+    if (res1==2||res1==1)
+    {
+      openLeftTap();
+      delay(5000);
+      openTap();   
+      closeLeftTap(); 
+    }
+  }
+  else
+  {
+    res1=checkStatus(sensorValue1,sensorValue2);
+    //Serial.println(res1);
+    if (res1==2||res1==1)
+    {
+      //lcd print low level of water need to plant and waiting for night
+    }
+  }
   int i=0;
+  if (MyBlue.available()) 
+  {
+
+      a=MyBlue.read();
+    a=int (a);
+     Serial.println(a);
+
+
+  if(a==2)
+
+  {
+      openLeftTap();
+      openTap();
+      closeLeftTap();
+  }
+  if (a==1)
+  {
+    closeLeftTap();
+    openTap();
+      
+  }
+  if(a==0)
+  
+  {
+    closeLeftTap();
+  }
+
+}
   for (i=0;i<5;i++)
   {
     Serial.print(sensorName[i]);
